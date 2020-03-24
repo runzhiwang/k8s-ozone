@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: datanode-{pod_index}
+  labels:
+    app.kubernetes.io/component: ozone
+spec:
+  selector:
+    matchLabels:
+      app: ozone
+      component: datanode-{pod_index}
+  serviceName: datanode-{pod_index}
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ozone
+        component: datanode-{pod_index}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9882"
+        prometheus.io/path: /prom
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - datanode-{pod_index}
+            topologyKey: kubernetes.io/hostname
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: datanode-{pod_index}
+        image: 'ozone:v1'
+        args:
+        - ozone
+        - datanode
+        env:
+        - name: JAEGER_SAMPLER_TYPE
+          value: const
+        - name: JAEGER_SAMPLER_PARAM
+          value: "1"
+        - name: JAEGER_AGENT_HOST
+          value: jaeger-0.jaeger
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: data
+          mountPath: /var
+      imagePullSecrets:
+      - name: regsecret
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: "datanode-local-storage-{pod_index}"
+      resources:
+        requests:
+          storage: 1000Gi
